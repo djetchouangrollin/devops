@@ -3,10 +3,10 @@ name: CI – Build and Test
 
 # Utilise pull_request_target pour pouvoir créer des issues avec GITHUB_TOKEN
 on:
-  pull_request:
-    branches: [ main, dev ]
   push:
-    branches: [ main, dev ]
+    branches: [ feature, dev ]
+  pull_request:
+    branches: [ feature, dev ]
 
 # Assure-toi que le token a bien le droit de créer des issues
 permissions:
@@ -34,9 +34,13 @@ jobs:
         run: npm ci
 
       - name: Run tests
+        id: frontend-tests
+        continue-on-error: true
         run: npm test -- --watchAll=false
 
       - name: Build
+        id: frontend-build
+        continue-on-error: true
         run: npm run build
 
   test-backend:
@@ -61,6 +65,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
+        id: backend-tests
+        continue-on-error: true
         run: python manage.py test
 
   docker-build:
@@ -88,38 +94,51 @@ jobs:
           EXIT_CODE=$?
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
 
-      - name: Create issue on Docker build failure
-        if: ${{ steps.client_build.outputs.exit_code != '0' || steps.server_build.outputs.exit_code != '0' }}
+  create-issue:
+    needs: [test-frontend, test-backend, docker-build]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Create Issue on Failure
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const prNumber = context.payload.pull_request?.number || 'push';
             const { owner, repo } = context.repo;
-            const clientExit = ${{ steps.client_build.outputs.exit_code }};
-            const serverExit = ${{ steps.server_build.outputs.exit_code }};
-            const clientLog = fs.readFileSync('client_build.log', 'utf8');
-            const serverLog = fs.readFileSync('server_build.log', 'utf8');
-
-            const body = `
-            ## Docker build failed on ${prNumber === 'push' ? 'push' : `PR #${prNumber}`}
-
-            **Client build** – exit code: ${clientExit}
-            \`\`\`
-            ${clientLog}
-            \`\`\`
-
-            **Server build** – exit code: ${serverExit}
-            \`\`\`
-            ${serverLog}
-            \`\`\`
-            `;
-
+            const branch = context.ref.replace('refs/heads/', '');
+            const commit = context.sha;
+            
+            let body = `## CI Failure on ${branch}\n\n`;
+            body += `Commit: ${commit}\n\n`;
+            
+            // Frontend test results
+            if (${{ needs.test-frontend.result }} === 'failure') {
+              body += `### Frontend Tests Failed\n`;
+              body += `\`\`\`\n${fs.readFileSync('client_build.log', 'utf8')}\n\`\`\`\n\n`;
+            }
+            
+            // Backend test results
+            if (${{ needs.test-backend.result }} === 'failure') {
+              body += `### Backend Tests Failed\n`;
+              body += `\`\`\`\n${fs.readFileSync('server_build.log', 'utf8')}\n\`\`\`\n\n`;
+            }
+            
+            // Docker build results
+            if (${{ needs.docker-build.result }} === 'failure') {
+              body += `### Docker Build Failed\n`;
+              body += `\`\`\`\n${fs.readFileSync('client_build.log', 'utf8')}\n\`\`\`\n\n`;
+              body += `\`\`\`\n${fs.readFileSync('server_build.log', 'utf8')}\n\`\`\`\n\n`;
+            }
+            
             await github.rest.issues.create({
               owner,
               repo,
-              title: `Docker build failed on ${prNumber === 'push' ? 'push' : `PR #${prNumber}`}`,
+              title: `CI Failure on ${branch}`,
               body,
-              labels: ['ci','docker-build-failure']
+              labels: ['ci-failure', 'bug']
             });

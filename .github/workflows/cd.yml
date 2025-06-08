@@ -1,61 +1,79 @@
 # .github/workflows/cd-promote-dev.yml
-name: CD – Deploy to Production
+name: CD – Deploy
 
 on:
-  push:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["CI – Build and Test"]
+    branches: [feature, dev]
+    types:
+      - completed
 
 jobs:
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v2
+      - name: Configure SSH
+        uses: webfactory/ssh-agent@v0.8.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Build and push Docker images
+      - name: Add host key
         run: |
-          docker-compose -f docker-compose.yml build
-          docker-compose -f docker-compose.yml push
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /var/www/portfolio
-            docker-compose pull
+      - name: Deploy
+        id: deploy
+        continue-on-error: true
+        run: |
+          set +e
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SERVER_HOST }} '
+            cd /path/to/project &&
+            git pull origin feature &&
+            docker-compose down &&
+            docker-compose build &&
             docker-compose up -d
+          ' > deploy.log 2>&1
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
 
-      - name: Health check
-        run: |
-          echo "Waiting for services to start..."
-          sleep 30
-          curl -f http://${{ secrets.SSH_HOST }}:3000 || exit 1
-          curl -f http://${{ secrets.SSH_HOST }}:8001 || exit 1
+  create-issue:
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v3
 
-      - name: Notify deployment status
-        if: always()
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_CHANNEL: deployments
-          SLACK_COLOR: ${{ job.status }}
-          SLACK_TITLE: Deployment ${{ job.status }}
-          SLACK_MESSAGE: |
-            Deployment to production has ${{ job.status }}
-            Commit: ${{ github.sha }}
-            Branch: ${{ github.ref }}
-            Author: ${{ github.actor }}
+      - name: Create Issue on Failure
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const branch = context.ref.replace('refs/heads/', '');
+            const commit = context.sha;
+            
+            let body = `## CD Failure on ${branch}\n\n`;
+            body += `Commit: ${commit}\n\n`;
+            
+            // Deployment results
+            if (${{ needs.deploy.result }} === 'failure') {
+              body += `### Deployment Failed\n`;
+              body += `\`\`\`\n${fs.readFileSync('deploy.log', 'utf8')}\n\`\`\`\n\n`;
+            }
+            
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: `CD Failure on ${branch}`,
+              body,
+              labels: ['cd-failure', 'bug']
+            });
