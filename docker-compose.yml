@@ -1,17 +1,31 @@
 version: '3.8'
 
 services:
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+      - grafana
+      - prometheus
+    networks:
+      - app_network
+
   frontend:
     build:
       context: ./client
       dockerfile: Dockerfile
-    ports:
-      - "3000:80"
+    expose:
+      - "80"
     volumes:
       - ./client:/app
       - /app/node_modules
     environment:
-      - REACT_APP_API_URL=http://localhost:8001
+      - REACT_APP_API_URL=/api
     depends_on:
       - backend
     networks:
@@ -21,22 +35,22 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    ports:
-      - "8001:8000"
+    expose:
+      - "8000"
     volumes:
       - ./server:/app
     environment:
       - DEBUG=1
       - SECRET_KEY=your-secret-key
       - ALLOWED_HOSTS=localhost,127.0.0.1
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+      - CORS_ALLOWED_ORIGINS=http://localhost
     networks:
       - app_network
 
   prometheus:
     image: prom/prometheus
-    ports:
-      - "9090:9090"
+    expose:
+      - "9090"
     volumes:
       - ./prometheus:/etc/prometheus
       - prometheus_data:/prometheus
@@ -50,8 +64,8 @@ services:
 
   grafana:
     image: grafana/grafana
-    ports:
-      - "3002:3000"
+    expose:
+      - "3000"
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
