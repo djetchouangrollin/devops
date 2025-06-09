@@ -1,8 +1,9 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from accounts import views  # Remplace "mainapp" par le nom de ton app si différent
 from django.http import JsonResponse
+import django_prometheus
 
 def home_view(request):
     # Si l'utilisateur n'est pas connecté, rediriger vers la page de connexion
@@ -43,5 +44,6 @@ urlpatterns = [
     path('api/login/', views.login_view, name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('portfolio/', portfolio_view, name='portfolio'),
+    path('', include('django_prometheus.urls')),  # Ajout des métriques Prometheus
     # path('dashboard/', views.dashboard_view, name='dashboard'),  # Désactivé temporairement
 ]

@@ -10,6 +10,8 @@ import Education from './components/Education';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import LoginForm from './components/LoginForm';
+import Project from './components/Project';
+import Formation from './components/Formation';
 
 function App() {
   return (
@@ -26,6 +28,8 @@ function App() {
         <Contact />
       </main>
       <Footer />
+      <Project />
+      <Formation />
     </div>
   );
 }

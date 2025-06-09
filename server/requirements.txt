@@ -7,3 +7,4 @@ requests
 django-cors-headers
 celery>=5.0.0
 prometheus-client
+Pillow>=9.0

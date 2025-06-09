@@ -1,63 +1,50 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import './Experience.css';
 
 const Experience = () => {
-  const experiences = [
-    {
-      id: 1,
-      title: "Stage en Architecture Système",
-      company: "Nom de l'entreprise",
-      period: "Juillet 2023 - Août 2023",
-      description: [
-        "Participation à la conception d'une architecture microservices",
-        "Développement d'APIs RESTful",
-        "Optimisation des performances système",
-        "Mise en place de solutions de monitoring"
-      ]
-    },
-    {
-      id: 2,
-      title: "Projet Académique",
-      company: "Université",
-      period: "Janvier 2023 - Juin 2023",
-      description: [
-        "Conception et implémentation d'un système distribué",
-        "Gestion de la scalabilité et de la haute disponibilité",
-        "Documentation technique et présentation des résultats"
-      ]
-    },
-    {
-      id: 3,
-      title: "Stage en Développement Logiciel",
-      company: "Nom de l'entreprise",
-      period: "Juillet 2022 - Août 2022",
-      description: [
-        "Développement d'applications web",
-        "Intégration de bases de données",
-        "Tests et déploiement continu"
-      ]
-    }
-  ];
+  const [experiences, setExperiences] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchExperiences = async () => {
+      try {
+        const response = await fetch('/api/experiences/', {
+          credentials: 'include'
+        });
+        if (!response.ok) {
+          throw new Error('Erreur lors du chargement des expériences');
+        }
+        const data = await response.json();
+        setExperiences(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExperiences();
+  }, []);
+
+  if (loading) return <div>Chargement...</div>;
+  if (error) return <div>Erreur: {error}</div>;
 
   return (
-    <section id="experience" className="experience">
-      <div className="container">
-        <h2>Expérience</h2>
-        <div className="timeline">
-          {experiences.map((exp) => (
-            <div key={exp.id} className="timeline-item">
-              <div className="timeline-content">
-                <h3>{exp.title}</h3>
-                <h4>{exp.company}</h4>
-                <span className="period">{exp.period}</span>
-                <ul className="description-list">
-                  {exp.description.map((item, index) => (
-                    <li key={index}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ))}
-        </div>
+    <section id="experience" className="experience-section">
+      <h2>Expériences Professionnelles</h2>
+      <div className="experience-container">
+        {experiences.map((exp) => (
+          <div key={exp.id} className="experience-card">
+            <h3>{exp.title}</h3>
+            <h4>{exp.company}</h4>
+            <p className="date">
+              {new Date(exp.start_date).toLocaleDateString()} - 
+              {exp.end_date ? new Date(exp.end_date).toLocaleDateString() : 'Présent'}
+            </p>
+            <p className="description">{exp.description}</p>
+          </div>
+        ))}
       </div>
     </section>
   );

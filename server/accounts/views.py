@@ -4,9 +4,13 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework import viewsets
+from .models import Experience, Project, Formation
+from .serializers import ExperienceSerializer, ProjectSerializer, FormationSerializer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -40,8 +44,7 @@ def login_view(request):
                     'id': user.id,
                     'username': user.username,
                     'email': user.email
-                },
-                'redirect_url': '/'  # Redirection vers la page d'accueil (portfolio)
+                }
             })
         else:
             logger.warning(f"Échec de connexion pour l'utilisateur: {username}")
@@ -56,3 +59,18 @@ def login_view(request):
             'status': 'error',
             'message': 'An error occurred during login'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ExperienceViewSet(viewsets.ModelViewSet):
+    queryset = Experience.objects.all()
+    serializer_class = ExperienceSerializer
+    permission_classes = [IsAuthenticated]
+
+class ProjectViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.all()
+    serializer_class = ProjectSerializer
+    permission_classes = [IsAuthenticated]
+
+class FormationViewSet(viewsets.ModelViewSet):
+    queryset = Formation.objects.all()
+    serializer_class = FormationSerializer
+    permission_classes = [IsAuthenticated]

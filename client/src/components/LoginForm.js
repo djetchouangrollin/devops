@@ -6,12 +6,33 @@ const LoginForm = () => {
     username: '',
     password: ''
   });
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Ici, vous pourrez ajouter la logique d'authentification plus tard
-    // Pour l'instant, nous redirigeons simplement vers la page d'administration
-    window.location.href = '/admin';
+    setError('');
+
+    try {
+      const response = await fetch('/api/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(credentials),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Redirection vers l'interface d'administration Django
+        window.location.href = 'http://localhost/admin/';
+      } else {
+        setError(data.message || 'Erreur de connexion');
+      }
+    } catch (err) {
+      setError('Erreur de connexion au serveur');
+    }
   };
 
   const handleChange = (e) => {
@@ -26,6 +47,7 @@ const LoginForm = () => {
     <div className="login-container">
       <form onSubmit={handleSubmit} className="login-form">
         <h2>Connexion</h2>
+        {error && <div className="error-message">{error}</div>}
         <div className="form-group">
           <input
             type="text"
